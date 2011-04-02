@@ -1,0 +1,8 @@
+Listen 8080
+<Location "/client175">
+    PythonPath "sys.path+['/var/www/client175', '/var/www/client175/cherrypy']"
+    SetHandler python-program
+    PythonHandler cherrypy._cpmodpy::handler
+    PythonOption cherrypy.setup server::serverless
+    PythonDebug On
+</Location>

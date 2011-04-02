@@ -18,38 +18,38 @@ Ext.apply(mpd.events, {
         }
     },
     fireEvent: function() {
-		var eventName = arguments[0]
-		if (this._suspendedEvents.indexOf(eventName) == -1) {
-			Ext.util.Observable.prototype.fireEvent.apply(this, arguments)
-		}
-	}
+        var eventName = arguments[0]
+        if (this._suspendedEvents.indexOf(eventName) == -1) {
+            Ext.util.Observable.prototype.fireEvent.apply(this, arguments)
+        }
+    }
 })
 
-mpd.events.addEvents("repeat", "playlists", "consume", "random", "uptime", 
-	"elapsed", "volume", "single", "db_update", "updating_db", "artists", "playtime", 
-	"albums", "db_playtime", "playlistlength", "playlist", "xfade", "state", 
-	"playlistname", "song", "songs")
-	
+mpd.events.addEvents("repeat", "playlists", "consume", "random", "uptime",
+    "elapsed", "volume", "single", "db_update", "updating_db", "artists", "playtime",
+    "albums", "db_playtime", "playlistlength", "playlist", "xfade", "state",
+    "playlistname", "song", "songs")
+
 
 mpd.timer_delay = 100
 mpd.status = {'state': 'stop'}
 mpd._updateValue = function(key, val) {
-	if (val != Ext.value(mpd.status[key], null)) {
-		mpd.status[key] = val
-		mpd.events.fireEvent.defer(10, mpd.events, [key, val])
-	}
+    if (val != Ext.value(mpd.status[key], null)) {
+        mpd.status[key] = val
+        mpd.events.fireEvent.defer(10, mpd.events, [key, val])
+    }
 }
 
 mpd._updateElapsed = function () {
-	/**
-	 * Update the elapsed time.  Working off of the clients clock and 
-	 * calculating the time since the last known value prevents drift
-	 * from javascript polling, which is not precise enough.
-	 **/
-	var now = new Date()
-	var diff = Math.round( now.getElapsed(this.startDate)/1000 )
-	var e = this.startElapsed + diff
-	mpd._updateValue('elapsed', e)
+    /**
+     * Update the elapsed time.  Working off of the clients clock and
+     * calculating the time since the last known value prevents drift
+     * from javascript polling, which is not precise enough.
+     **/
+    var now = new Date()
+    var diff = Math.round( now.getElapsed(this.startDate)/1000 )
+    var e = this.startElapsed + diff
+    mpd._updateValue('elapsed', e)
 }
 
 mpd._elapsedRunner = new Ext.util.TaskRunner()
@@ -57,39 +57,39 @@ mpd._elapsedRunner = new Ext.util.TaskRunner()
 
 mpd.checkStatus = new Ext.util.DelayedTask(function() {
     Ext.Ajax.request({
-        url: '/status',
+        url: '../status',
         params: {
             'uptime': mpd.status.uptime,
             'updating_db': mpd.status.updating_db
         },
         success: function (req, opt) {
-			try {
-				var txt = req.responseText
-				if (txt != 'NO CHANGE') {
-					mpd._elapsedRunner.stopAll()
-					var obj = Ext.util.JSON.decode(txt)
-					Ext.iterate(obj, mpd._updateValue)
-					/** 
-					 * Rather than constantly polling for elapsed time changes,
-					 * just update the elapsed time internally.  It has 
-					 * a smoother appearance that way and is actually
-					 * more accurate on average.
-					 **/
-					if (mpd.status.state == 'play') {
-						var task = {
-							startDate: new Date(),
-							startElapsed: parseInt(mpd.status.elapsed),
-							run: mpd._updateElapsed,
-							interval: 1000
-						}
-						mpd._elapsedRunner.start(task)
-					}
-				}
-				mpd.checkStatus.delay(100)
-			} catch (e) {
-				console.log(e)
-				mpd.checkStatus.delay(3000)
-			}
+            try {
+                var txt = req.responseText
+                if (txt != 'NO CHANGE') {
+                    mpd._elapsedRunner.stopAll()
+                    var obj = Ext.util.JSON.decode(txt)
+                    Ext.iterate(obj, mpd._updateValue)
+                    /**
+                     * Rather than constantly polling for elapsed time changes,
+                     * just update the elapsed time internally.  It has
+                     * a smoother appearance that way and is actually
+                     * more accurate on average.
+                     **/
+                    if (mpd.status.state == 'play') {
+                        var task = {
+                            startDate: new Date(),
+                            startElapsed: parseInt(mpd.status.elapsed),
+                            run: mpd._updateElapsed,
+                            interval: 1000
+                        }
+                        mpd._elapsedRunner.start(task)
+                    }
+                }
+                mpd.checkStatus.delay(100)
+            } catch (e) {
+                console.log(e)
+                mpd.checkStatus.delay(3000)
+            }
         },
         failure: function (req, opt) {
             mpd.checkStatus.delay(3000)
@@ -98,7 +98,7 @@ mpd.checkStatus = new Ext.util.DelayedTask(function() {
 })
 
 
- 
+
 mpd.cmd = function (aCmd, callBack) {
     var url = ".."
     if (Ext.isArray(aCmd)) {

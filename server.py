@@ -41,6 +41,7 @@ try:
 except:
     cherrypy.config.update(os.path.join(LOCAL_DIR, "site.conf"))
 
+SERVER_ROOT = cherrypy.config.get('server_root', '/')
 MUSIC_DIR = cherrypy.config.get('music_directory', '/var/lib/mpd/music/')
 MUSIC_DIR = os.path.expanduser(MUSIC_DIR)
 COVERS_DIR = os.path.join(LOCAL_DIR, "static", "covers")
@@ -71,6 +72,7 @@ PORT = cherrypy.config.get('mpd_port', PORT)
 PASSWORD = cherrypy.config.get('mpd_password', PASSWORD)
 RUN_AS = cherrypy.config.get('run_as', RUN_AS)
 
+HOST = "192.168.1.2"
 
 mpd = mpd_proxy.Mpd(HOST, PORT, PASSWORD)
 mpd.include_playlist_counts = cherrypy.config.get('include_playlist_counts', True)
@@ -605,23 +607,49 @@ class Root:
     tree.exposed = True
 
 
+root = Root()
 
 # Uncomment the following to use your own favicon instead of CP's default.
 #favicon_path = os.path.join(LOCAL_DIR, "favicon.ico")
 #root.favicon_ico = tools.staticfile.handler(filename=favicon_path)
 
-shost = cherrypy.config.get('server.socket_host')
-sport = cherrypy.config.get('server.socket_port')
-if shost == '0.0.0.0':
-    shost = 'localhost'
-if sport is None:
-    sport = "8080"
+cherrypy.tree.mount(root, SERVER_ROOT)
 
-print ""
-print "=" * 60
-print "Server Ready."
-print "Client175 is available at:  http://%s:%s" % (shost, sport)
-print "=" * 60
-print ""
 
-cherrypy.quickstart(Root())
+def serverless():
+    """Start with no server (for mod_python or other WSGI HTTP servers).
+
+    You can also use this mode interactively:
+        >>> import cpdeploy
+        >>> cpdeploy.serverless()
+    """
+    cherrypy.server.unsubscribe()
+    cherrypy.config.update({
+        'log.error_file': os.path.join(os.path.dirname(__file__), 'site.log'),
+        'environment': 'production',
+        })
+
+
+def serve():
+    """Start with the builtin server."""
+    cherrypy.config.update({'log.screen': True})
+    cherrypy.engine.start()
+
+
+
+if __name__ == "__main__":
+    shost = cherrypy.config.get('server.socket_host')
+    sport = cherrypy.config.get('server.socket_port')
+    if shost == '0.0.0.0':
+        shost = 'localhost'
+    if sport is None:
+        sport = "8080"
+
+    print ""
+    print "=" * 60
+    print "Server Ready."
+    print "Client175 is available at:  http://%s%s:%s" % (shost, sport, SERVER_ROOT)
+    print "=" * 60
+    print ""
+
+    serve()
