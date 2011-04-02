@@ -19,7 +19,7 @@
 #       Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #       MA 02110-1301, USA.
 #
-#       The design of this module was inspired by the cover search found in 
+#       The design of this module was inspired by the cover search found in
 #       Exaile (http://www.exaile.org/).
 
 
@@ -40,13 +40,13 @@ class CoverSearch():
             self.cover_dir = cover_dir
         else:
             self.cover_dir = os.path.expanduser(os.path.join('~','.Covers'))
-            
+
         if not os.path.exists(self.cover_dir):
             os.makedirs(self.cover_dir)
-            
+
         self.urlMB = 'http://musicbrainz.org/ws/1/release/?type=xml&title=%(album)s&artist=%(artist)s&limit=1'
         self.regexMB = re.compile('\<asin\>([^\<]*)\<\/asin\>', re.IGNORECASE)
-        
+
         self.urlFM = "http://ws.audioscrobbler.com/1.0/album/%(artist)s/%(album)s/info.xml"
 
         self.urlFM_artist = "http://ws.audioscrobbler.com/1.0/artist/%s/similar.xml"
@@ -91,18 +91,18 @@ class CoverSearch():
                 if len(data) > 1000:
                     return data
         return False
-    
+
 
     def _findLastFM_album(self, vars):
         self._delay('last_FM_lookup')
         data = urllib.urlopen(self.urlFM % vars).read()
         x = ET.XML(data)
-        if not x:
+        if len(x) == 0:
             print 'LASTFM SEARCH: ERROR PARSING LASTFM DATA!'
             return False
-            
+
         c = x.find('coverart')
-        if not c:
+        if len(c) == 0:
             print 'LASTFM SEARCH: NO COVERART NODE IN LASTFM DATA!'
             return False
 
@@ -132,7 +132,7 @@ class CoverSearch():
             if hashlib.sha1(data).hexdigest() != "57b2c37343f711c94e83a37bd91bc4d18d2ed9d5":
                 return data
         return False
-            
+
 
     def find(self, path='', artist='', album=''):
         for p in self.local_covers:
@@ -144,14 +144,22 @@ class CoverSearch():
                 covername = '%s - %s.%s'  % (artist, album, ext)
                 cover_destination = os.path.join(self.cover_dir, covername)
                 if not os.path.exists(cover_destination):
-                    shutil.copy2(coverpath, cover_destination)
-                return covername
-                
+                    try:
+                        shutil.copy2(coverpath, cover_destination)
+                    except IOError:
+                        print "Could not save cover to: " + cover_destination
+                        print "For best performance, please ensure that the directory exists and is writable."
+                        h = open(coverpath, 'r')
+                        data = h.read()
+                        h.close()
+                        return "", data
+                return covername, None
+
         if not artist:
-            return False
-            
-        if album:                    
-            covername = '%s - %s.jpg' % (artist, album)                    
+            return False, None
+
+        if album:
+            covername = '%s - %s.jpg' % (artist, album)
             lookups = [
                 self._findMusicBrainz,
                 self._findLastFM_album,
@@ -161,11 +169,11 @@ class CoverSearch():
             album = ''
             covername = '%s.jpg' % artist
             lookups = [self._findLastFM_artist]
-            
+
         coverpath = os.path.join(self.cover_dir, covername)
         if os.path.isfile(coverpath):
-            return covername
-            
+            return covername, None
+
         vars = {
             'album': urllib.quote_plus(album.encode("utf-8")),
             'artist': urllib.quote_plus(artist.encode("utf-8"))
@@ -175,12 +183,17 @@ class CoverSearch():
             try:
                 data = fn(vars)
                 if data:
-                    h = open(coverpath, 'w')
-                    h.write(data)
-                    h.close()
-                    return covername
+                    try:
+                        h = open(coverpath, 'w')
+                        h.write(data)
+                        h.close()
+                    except:
+                        print "Could not save cover to: " + coverpath
+                        print "For best performance, please ensure that the directory exists and is writable."
+                        covername = ""
+                    return covername, data
             except:
                 pass
 
-        return False
+        return False, None
 

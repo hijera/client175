@@ -65,7 +65,7 @@ if os.environ.has_key("MPD_HOST"):
 
 if os.environ.has_key("MPD_PORT"):
     PORT = int(os.environ["MPD_PORT"])
-    
+
 HOST = cherrypy.config.get('mpd_host', HOST)
 PORT = cherrypy.config.get('mpd_port', PORT)
 PASSWORD = cherrypy.config.get('mpd_password', PASSWORD)
@@ -92,13 +92,13 @@ class Root:
             return False
         return "Bad Login"
     cherrypy.config.update({'tools.session_auth.check_username_and_password': check_username_and_password})
-    
-    
+
+
     def _error_page_501(status, message, traceback, version):
         return message
     cherrypy.config.update({'error_page.501': _error_page_501})
 
-        
+
     def about(self, *args):
         """
         Convert AUTHORS.txt into a web page with links.
@@ -115,12 +115,12 @@ class Root:
                     href = "static/" + href
                 line = "License:  <a target='_blank' href='%s'>%s</a>" % (href, href)
             txt.append(line)
-            
+
         f.close()
         return '<html><body>' + '<br>'.join(txt) + '</body></html>'
     about.exposed = True
-    
-        
+
+
     def add(self, *args):
         if len(args) == 2:
             if args[0] in ('file', 'directory'):
@@ -155,7 +155,7 @@ class Root:
                     elif mime == "application/xspf+xml" or ext == "xspf":
                         mpd.load_xspf(data)
                     else:
-                        raise cherrypy.HTTPError(501, message="Unsupported URI:  "+d)                        
+                        raise cherrypy.HTTPError(501, message="Unsupported URI:  "+d)
             else:
                 mpd.add(d)
     add.exposed = True
@@ -163,7 +163,7 @@ class Root:
 
     def covers(self, **kwargs):
         f = kwargs.get('file')
-        path = None
+        path = ''
         artist = kwargs.get('artist')
         album = kwargs.get('album')
         if f:
@@ -173,11 +173,13 @@ class Root:
                 _file = mpd.lsinfo(f)
                 artist = _file.get('artist')
                 album = _file.get('album')
-        image = cs.find(path, artist, album)
+        img_path, img_data = cs.find(path, artist, album)
         u = cherrypy.url().split('covers')[0]
-        if image:
-            url = u+'static/covers/'+image
+        if img_path:
+            url = u+'static/covers/'+img_path
         else:
+            if img_data:
+                return img_data
             url = u+'static/covers/album_blank.png'
         raise cherrypy.HTTPRedirect(url, 301)
     covers.exposed = True
@@ -211,17 +213,17 @@ class Root:
         %s\n
         \n
         Please set the music_directory option in site.conf."""
-        
+
         if not os.path.exists(MUSIC_DIR):
             raise cherrypy.HTTPError(501, message=err % MUSIC_DIR)
-                
+
         loc = os.path.join(MUSIC_DIR, id)
         if not os.path.exists(loc):
             raise cherrypy.HTTPError(501, message=err % loc)
-            
+
         if loc.lower().endswith(".wav"):
             return "WAV editing not supported."
-            
+
         tags = {}
         for tag, val in kwargs.items():
             tag = tag.lower()
@@ -232,10 +234,10 @@ class Root:
             else:
                 tags[tag] = val
             print '%s[%s] = "%s"' % (id, tag, val)
-            
+
         f = metadata.get_format(loc)
         f.write_tags(tags)
-                            
+
         updating = False
         while not updating:
             try:
@@ -246,7 +248,7 @@ class Root:
                     sleep(0.01)
                 else:
                     raise cherrypy.HTTPError(501, message=e)
-        
+
         return "OK"
     edit.exposed = True
 
@@ -303,7 +305,7 @@ class Root:
                 'id': 'playlist:'
             }
         ]
-        
+
         result['totalCount'] = len(result['data'])
         return json.dumps(result)
     home.exposed = True
@@ -312,8 +314,8 @@ class Root:
     def index(self):
         raise cherrypy.HTTPRedirect('static/index.html', 301)
     index.exposed = True
-    
-    
+
+
     def filter_results(self, data, filter):
         filter = filter.lower()
         d = []
@@ -325,8 +327,8 @@ class Root:
                         d.append(item)
                         break
         return d
-    
-    
+
+
     def lyrics(self, title, artist, **kwargs):
         txt = lyricwiki.get_lyrics(artist, title)
         if txt:
@@ -370,7 +372,7 @@ class Root:
         start = int(start)
         limit = int(limit)
         ln = int(mpd.state['playlistlength'])
-        
+
         if filter:
             data = mpd.playlistsearch('any', filter)
             mpd.setPlaylistFiles(data)
@@ -395,10 +397,10 @@ class Root:
             else:
                 data = mpd.playlistinfo()
             mpd.setPlaylistFiles(data)
-                       
+
         if data and kwargs.get('albumheaders'):
             result = []
-            
+
             def makeHeader(dg):
                 return {
                     'album': dg('album', 'Unknown'),
@@ -406,7 +408,7 @@ class Root:
                     'file': dg('file'),
                     'cls': 'album-group-start'
                 }
-                
+
             a = makeHeader(data[0].get)
             result.append(a)
             for d in data:
@@ -417,12 +419,12 @@ class Root:
                     result.append(a)
                 elif a['artist'] != g('albumartist', g('artist', 'Unknown')):
                     a['artist'] = 'Various Artists'
-                    
+
                 d['cls'] = 'album-group-track'
                 result.append(d)
         else:
             result = data
-            
+
         if limit:
             return json.dumps({'totalCount': ln, 'data': result})
         else:
@@ -439,30 +441,30 @@ class Root:
         except MPDError, e:
             raise cherrypy.HTTPError(501, message=str(e))
     protocol.exposed = True
-                
+
 
     def query(self, cmd, start=0, limit=0, sort='', dir='ASC', filter='', **kwargs):
         if not cmd:
             return self.home()
-            
+
         if cmd == 'playlistinfo':
             return self.playlistinfoext(start, limit, filter, **kwargs)
-            
+
         node = kwargs.get("node", False)
         if node:
             m = int(kwargs.get('mincount', 0))
             return self.tree(cmd, node, m)
-            
+
         start = int(start)
         limit = int(limit)
         if sort:
             data = mpd.execute_sorted(cmd, sort, dir=='DESC')
         else:
             data = mpd.execute(cmd)
-            
+
         if filter:
             data = self.filter_results(data, filter)
-            
+
         if limit:
             ln = len(data)
             end = start + limit
@@ -477,16 +479,16 @@ class Root:
             result['data'] = d
         else:
             result = data
-            
+
         if cmd.startswith('list '):
             return json.dumps(result)
-            
+
         if cmd == 'listplaylists':
             return json.dumps(result)
-            
+
         if limit:
             data = result['data']
-                    
+
         for i in range(len(data)):
             d = data[i]
             if d['type'] == 'file':
@@ -532,7 +534,7 @@ class Root:
                         'type': 'directory',
                         'leaf': True
                     })
-                    
+
             def loadChildren(parent, parentpath):
                 children = [x for x in data if x['parent'] == parentpath]
                 if children:
@@ -541,7 +543,7 @@ class Root:
                     for c in children:
                         parent['children'].append(c)
                         loadChildren(c, c['directory'])
-                        
+
             root = {}
             loadChildren(root, '')
             result = root['children']
@@ -566,7 +568,7 @@ class Root:
             if mincount:
                 mincount -= 1
                 data = [x for x in data if x['songs'] > mincount]
-            
+
             if itemType == 'directory':
                 result = [x for x in data if x['type'] == itemType]
             elif len(data) > 200:
@@ -612,6 +614,14 @@ shost = cherrypy.config.get('server.socket_host')
 sport = cherrypy.config.get('server.socket_port')
 if shost == '0.0.0.0':
     shost = 'localhost'
+if sport is None:
+    sport = "8080"
+
+print ""
+print "=" * 60
 print "Server Ready."
 print "Client175 is available at:  http://%s:%s" % (shost, sport)
+print "=" * 60
+print ""
+
 cherrypy.quickstart(Root())
