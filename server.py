@@ -72,7 +72,6 @@ PORT = cherrypy.config.get('mpd_port', PORT)
 PASSWORD = cherrypy.config.get('mpd_password', PASSWORD)
 RUN_AS = cherrypy.config.get('run_as', RUN_AS)
 
-HOST = "192.168.1.2"
 
 mpd = mpd_proxy.Mpd(HOST, PORT, PASSWORD)
 mpd.include_playlist_counts = cherrypy.config.get('include_playlist_counts', True)
