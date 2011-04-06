@@ -122,7 +122,9 @@ class Root:
     about.exposed = True
 
 
-    def add(self, *args):
+    def add(self, *args, **kwargs):
+        if len(kwargs) > 0:
+            args = list(args) + kwargs.values()
         if len(args) == 2:
             if args[0] in ('file', 'directory'):
                 d = args[1]
@@ -186,7 +188,7 @@ class Root:
     covers.exposed = True
 
 
-    def default(self, *args):
+    def default(self, *args, **kwargs):
         """
         Wrap mpd commands in a REST API and return json encoded output.
         Any URL not already defined is assumed to be an mpd command.
@@ -197,6 +199,9 @@ class Root:
             ...is equivilant to a GET request to:
                 http://localhost:8080/list/album/artist/David%20Bowie
         """
+
+        if len(kwargs) > 0:
+            args = list(args) + kwargs.values()
         try:
             if len(args) == 1:
                 args = args[0]
