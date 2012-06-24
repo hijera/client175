@@ -27,7 +27,7 @@ from datetime import datetime, timedelta
 import mpd_proxy2 as mpd_proxy
 from mpd import MPDError
 from covers import CoverSearch
-import lyricwiki
+import requests
 import metadata
 from metadata._base import NotReadable, NotWritable
 
@@ -50,6 +50,10 @@ if LOCAL_COVERS:
     for i in range(len(LOCAL_COVERS)):
         LOCAL_COVERS[i] = os.path.expanduser(LOCAL_COVERS[i])
 
+LYRICS_DIR = os.path.join(LOCAL_DIR, "static", "lyrics")
+if not os.path.exists(LYRICS_DIR):
+    os.makedirs(LYRICS_DIR)
+    
 HOST = "localhost"
 PORT = 6600
 PASSWORD = None
@@ -336,10 +340,49 @@ class Root:
 
 
     def lyrics(self, title, artist, **kwargs):
-        txt = lyricwiki.get_lyrics(artist, title)
-        if txt:
-            return txt.replace("\n", "<br/>")
-        return "Not Found"
+        cache_path = os.path.join(LYRICS_DIR, artist)
+        file_path = os.path.join(cache_path, title + ".html")
+        if os.path.exists(cache_path):
+            if os.path.exists(file_path):
+                print "====USING CACHE==="
+                with open(file_path, 'r') as f:
+                    return f.read()
+        else:
+            os.makedirs(cache_path)
+            
+        url = "http://api.chartlyrics.com/apiv1.asmx/SearchLyricDirect"
+        p = {"artist": artist, "song": title}
+        result = "Not Found"
+        retry = 0
+        r = None
+        requests.max_retries = 0
+        while retry < 3 and r is None:
+            try:
+                r = requests.get(url, params=p, timeout=15)
+            except Exception, err:
+                print "%s: \n    Retry %s\n    %s" % (url, retry, err)
+                retry += 1
+                sleep(3.0)
+        if r is None:
+            return "Could not reach ChartLyrics.com..."
+            
+        if r.error:
+            result = r.error
+        else:
+            print "====GOT RESULT==="
+            xml = BeautifulSoup(r.text)
+            root = xml.getlyricresult
+            if root:
+                lyric = root.lyric
+                if lyric:
+                    result = lyric.contents[0]
+                    
+        result = result.replace("\n", "<br/>")
+        with open(file_path, 'w') as f:
+            print "====SAVING CACHE==="
+            f.write(result)
+        print result
+        return result
     lyrics.exposed = True
 
 
@@ -619,6 +662,10 @@ root = Root()
 
 cherrypy.tree.mount(root, SERVER_ROOT)
 
+def cleanup():
+    print "     CLEANUP CALLED"
+    mpd.kill()
+    
 
 def serverless():
     """Start with no server (for mod_python or other WSGI HTTP servers).
@@ -637,6 +684,9 @@ def serverless():
 def serve():
     """Start with the builtin server."""
     cherrypy.config.update({'log.screen': True})
+    if hasattr(cherrypy.engine, 'signal_handler'):
+        cherrypy.engine.signal_handler.subscribe()
+        cherrypy.engine.subscribe("stop", cleanup)
     cherrypy.engine.start()
 
 
@@ -652,7 +702,7 @@ if __name__ == "__main__":
     print ""
     print "=" * 60
     print "Server Ready."
-    print "Client175 is available at:  http://%s%s:%s" % (shost, sport, SERVER_ROOT)
+    print "Client175 is available at:  http://%s:%s/%s" % (shost, sport, SERVER_ROOT)
     print "=" * 60
     print ""
 

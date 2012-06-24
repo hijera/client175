@@ -50,6 +50,11 @@ def Mpd(host, port, password):
         _Poller.setDaemon(True)
         _Poller.start()
     return _Instance
+    
+    def kill(self):
+        self._Poller.keep_alive = False
+        self._Instance.disconect()
+        self._Instance = None
 
 
 
@@ -66,6 +71,7 @@ class _Mpd_Poller(threading.Thread):
         self._port = port
         self._password = password
         self.con = None
+        self.keep_alive = True
 
 
     def _connect(self):
@@ -84,7 +90,7 @@ class _Mpd_Poller(threading.Thread):
         global _Instance
         self._connect()
         _Instance.sync(['startup'])
-        while True:
+        while self.keep_alive:
             try:
                 changes = self.con.idle()
                 _Instance.sync(changes)
