@@ -350,34 +350,54 @@ class Root:
         else:
             os.makedirs(cache_path)
             
-        url = "http://api.chartlyrics.com/apiv1.asmx/SearchLyricDirect"
-        p = {"artist": artist, "song": title}
+        #  The commented out parts are the correct usage of the api....
+        #  Unfortunately, it is hooribly slow.  Somehow scraping the web
+        #  interface is faster and more reliable.
+        #
+        #url = "http://api.chartlyrics.com/apiv1.asmx/SearchLyricDirect"
+        #p = {"artist": artist, "song": title}
+        url = "http://www.chartlyrics.com/search.aspx"
+        p = {"q": artist + " " + title}
         result = "Not Found"
         retry = 0
         r = None
-        requests.max_retries = 0
-        while retry < 3 and r is None:
-            try:
-                r = requests.get(url, params=p, timeout=15)
-            except Exception, err:
-                print "%s: \n    Retry %s\n    %s" % (url, retry, err)
-                retry += 1
-                sleep(3.0)
-        if r is None:
-            return "Could not reach ChartLyrics.com..."
-            
-        if r.error:
-            result = r.error
-        else:
-            print "====GOT RESULT==="
-            xml = BeautifulSoup(r.text)
-            root = xml.getlyricresult
-            if root:
-                lyric = root.lyric
-                if lyric:
-                    result = lyric.contents[0]
-                    
-        result = result.replace("\n", "<br/>")
+        try:
+            while retry < 3 and r is None:
+                try:
+                    r = requests.get(url, params=p)
+                except Exception, err:
+                    print "%s: \n    Retry %s\n    %s" % (url, retry, err)
+                    retry += 1
+                    sleep(5.0)
+            if r is None:
+                return "Could not reach ChartLyrics.com..."
+                
+            if r.error:
+                result = r.error
+            else:
+                #xml = BeautifulSoup(r.text)
+                #root = xml.getlyricresult
+                #if root:
+                #    lyric = root.lyric
+                #    if lyric:
+                #        result = lyric.contents[0].replace("\n", "<br/>")
+                soup = BeautifulSoup(r.content)
+                page = soup.find(id="page")
+                td = page.findAll("td")[1]
+                link = td.find("a")["href"]
+                r = requests.get("http://www.chartlyrics.com" + link)
+                if r.error:
+                    result = r.error
+                else:
+                    soup = BeautifulSoup(r.content)
+                    page = soup.find(id="page")
+                    p = page.find("p")
+                    p.img.decompose()
+                    result = str(p)
+                    print "====GOT RESULT==="
+        except:
+            return "Not Found"
+        
         with open(file_path, 'w') as f:
             print "====SAVING CACHE==="
             f.write(result)
